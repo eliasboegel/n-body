@@ -66,49 +66,6 @@ items_geo_shader_code = """
     }
 """
 
-particle_acc_compute = """
-    #version 430
-    #define GROUP_SIZE_X %COMPUTE_SIZE_X%
-    #define GROUP_SIZE_Y %COMPUTE_SIZE_Y%
-    #define N_BODIES %N_BODIES%
-    layout(local_size_x=GROUP_SIZE_X, local_size_y=GROUP_SIZE_Y) in;
-
-    struct Particle
-    {
-        // Order of these declarations is important
-        vec3 pos; // x, y, z (Position)
-        float radius;
-        vec3 vel; // x, y, z (Velocity)
-        float mass;
-        vec4 col; // r, g, b (Color)
-    };
-    layout(std430, binding=0) buffer particles_ssbo
-    {
-        Particle particles[];
-    } ParticleSSBO;
-    layout(std430, binding=1) buffer acc_ssbo
-    {
-        vec4 acc[N_BODIES][N_BODIES];
-    } AccSSBO;
-
-    void main()
-    {
-        ivec2 id = ivec2(gl_GlobalInvocationID.xy);
-
-        if (id.x != id.y) {
-            Particle particle1 = ParticleSSBO.particles[id.x];
-            Particle particle2 = ParticleSSBO.particles[id.y];
-
-            vec3 pos_diff = particle2.pos - particle1.pos;
-            float d = length(pos_diff);
-            float acc_val = particle2.mass / (d * d);
-            vec3 accel = normalize(pos_diff) * acc_val;
-
-            AccSSBO.acc[id.x][id.y].xyz = accel;
-        }
-    }
-"""
-
 particle_update_compute = """
     #version 430
     #define GROUP_SIZE %COMPUTE_SIZE%
@@ -145,22 +102,14 @@ particle_update_compute = """
         Particle particle = ParticleSSBO.particles[id];
 
         // Acceleration calculation
-        //vec3 acc = vec3(0.0f);
-        //for (int i = 0; i < N_BODIES; ++i) {
-        //    if (i != id) {
-        //        Particle other_particle = ParticleSSBO.particles[i];
-        //        vec3 pos_diff = other_particle.pos - particle.pos;
-        //        float d = length(pos_diff);
-        //        float acc_val = other_particle.mass / (d * d); // Is already acceleration as it has been divided by mass of current body
-        //        acc += normalize(pos_diff) * acc_val;
-        //    }
-        //}
-
-        // Sum accelerations
         vec3 acc = vec3(0.0f);
         for (int i = 0; i < N_BODIES; ++i) {
             if (i != id) {
-                acc += AccSSBO.acc[id][i];
+                Particle other_particle = ParticleSSBO.particles[i];
+                vec3 pos_diff = other_particle.pos - particle.pos;
+                float d = length(pos_diff);
+                float acc_val = other_particle.mass / (d * d); // Is already acceleration as it has been divided by mass of current body
+                acc += normalize(pos_diff) * acc_val;
             }
         }
 

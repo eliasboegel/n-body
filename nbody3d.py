@@ -1,7 +1,5 @@
-import math
-import random
 import numpy as np
-import moderngl, moderngl_window as mglw
+import moderngl_window as mglw
 import shaders
 
 
@@ -18,7 +16,7 @@ class ComputeParticleBase(mglw.WindowConfig):
         m = 0.00000001
         m_sun = np.power(10,7)  # Mass of sun, roughly 10^6 times bigger than earth
         # Create the two buffers the compute shader will write and read from
-        array = np.genfromtxt("init.csv", skip_header=1, delimiter=",")[:,1:].astype("f4")
+        #array = np.genfromtxt("init.csv", skip_header=1, delimiter=",")[:,1:].astype("f4")
         #initial_state = initial_state[:, [2,3,4,1,5,6,7,0,8,9,10,11]] # Re-order columns to match layout in shader
         initial_state = np.random.uniform(-0.95, 0.95, (self.n_bodies,12)).astype("f4")
         # initial_state = np.ones((self.n_bodies, 12)).astype("f4")
@@ -64,12 +62,6 @@ class ComputeParticleBase(mglw.WindowConfig):
             fragment_shader=shaders.items_fragment_shader_code
         )
 
-        ### Load compute shaders
-        # Acceleration shader
-        particle_acc_compute_parsed = shaders.particle_acc_compute.replace("%COMPUTE_SIZE_X%", "32")
-        particle_acc_compute_parsed = particle_acc_compute_parsed.replace("%COMPUTE_SIZE_Y%", "32")
-        particle_acc_compute_parsed = particle_acc_compute_parsed.replace("%N_BODIES%", str(self.n_bodies))
-        self.particle_acc_compute = self.ctx.compute_shader(particle_acc_compute_parsed)
         # Particle update shader
         particle_update_compute_parsed = shaders.particle_update_compute.replace("%COMPUTE_SIZE%", "1024")
         particle_update_compute_parsed = particle_update_compute_parsed.replace("%N_BODIES%", str(self.n_bodies))
@@ -97,11 +89,6 @@ class ComputeParticleBase(mglw.WindowConfig):
         dt = 0.0002
         # Bind buffers
         self.buf_particles.bind_to_storage_buffer(0)
-        self.buf_acc.bind_to_storage_buffer(1)
-
-        # Calculate all accelerations
-        n_workgroups_acc = np.ceil(self.n_bodies / 32).astype(int)
-        self.particle_acc_compute.run(group_x=n_workgroups_acc)
 
         # Calculate the next position of the particles with compute shader
         n_workgroups_update = np.ceil(self.n_bodies / 1024).astype(int)

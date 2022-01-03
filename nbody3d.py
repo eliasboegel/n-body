@@ -13,17 +13,34 @@ class ComputeParticleBase(mglw.WindowConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        self.n_bodies = 512
+        m = 1
+        m_sun = 10000000
         # Create the two buffers the compute shader will write and read from
         #initial_state = np.genfromtxt("init.csv", skip_header=1, delimiter=",")[:,1:].astype("f4")
         #initial_state = initial_state[:, [2,3,4,1,5,6,7,0,8,9,10,11]] # Re-order columns to match layout in shader
-        initial_state = np.random.uniform(-0.9, 0.9, (4096,12)).astype("f4")
+        initial_state = np.random.uniform(-0.95, 0.95, (self.n_bodies,12)).astype("f4")
+        initial_state[:,2] = 0
         initial_state[:,3] = 0.02 # Radius
-        initial_state[:,7] = 100 # Mass
-        initial_state[:,8:11] = np.random.uniform(0.5, 1.0, (4096,3)).astype("f4") # Color
+        initial_state[:,7] = np.random.uniform(1, 1000, (self.n_bodies)).astype('f4') # Mass
+        # initial_state[:,4:7] = 0 # Zero velocity
+        initial_state[:,8:11] = np.random.uniform(0.5, 1.0, (self.n_bodies,3)).astype("f4") # Color
         initial_state[:,11] = 1 # Alpha
-        initial_state[:,4:6] = 0 # Zero velocity
-        #print(initial_state)
-        self.n_bodies = initial_state.shape[0]
+        pos = initial_state[:,0:3]
+        r = np.sqrt(np.sum(pos**2,axis=1))
+
+        v = np.sqrt((m_sun * m) / r)
+        vx = -v*pos[:,1]/r
+        vy = v*pos[:,0]/r
+        vz = v*pos[:,2]/r
+        initial_state[:,4:7] = np.array([vx, vy, vz]).transpose()/1
+
+        ## Creating the Sun
+        initial_state[0, :3] = 0  # Pos
+        initial_state[0, 3] = 0.04  # Radius
+        initial_state[0,4:7] = 0 # Velocity
+        initial_state[0, 7] = m_sun  # Mass
+        initial_state[0, 8:11] = np.array([1,0,0])  # Color
 
         self.buf_particles = self.ctx.buffer(initial_state.flatten())
         self.buf_acc = self.ctx.buffer(reserve=self.n_bodies*self.n_bodies*4*4) # Reserve 3 4-byte floats for each combination of n_bodies
@@ -51,11 +68,10 @@ class ComputeParticleBase(mglw.WindowConfig):
         self.vao_particles = self.ctx.vertex_array(
             self.program, [(self.buf_particles, '4f 4x4 4f', 'in_vert', 'in_col')],
         )
-
-
     def render(self, time, frame_time):
-        if frame_time > 0.0001: print(f"Frame time: {frame_time*1000} ms")
+        if frame_time > 0.0001: print(f"Frame time: {frame_time * 1000} ms")
 
+        dt = 0.00001
         # Bind buffers
         self.buf_particles.bind_to_storage_buffer(0)
         self.buf_acc.bind_to_storage_buffer(1)
@@ -66,12 +82,11 @@ class ComputeParticleBase(mglw.WindowConfig):
 
         # Calculate the next position of the particles with compute shader
         n_workgroups_update = np.ceil(self.n_bodies / 1024).astype(int)
-        self.particle_update_compute['dt'] = frame_time * 0.01
+        self.particle_update_compute['dt'] = frame_time * dt
         self.particle_update_compute.run(group_x=n_workgroups_update)
 
         # Batch draw the particles
         self.vao_particles.render(mode=self.ctx.POINTS)
-
 
 if __name__ == "__main__":
     ComputeParticleBase.run()

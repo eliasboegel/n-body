@@ -110,8 +110,8 @@ particle_update_compute = """
                 float d = length(pos_diff);
                 float acc_val = other_particle.mass / (d * d); // Is already acceleration as it has been divided by mass of current body
                 
-                if (d < 0.001) {
-                    vec3 avg_vel = particle.vel/2 + other_particle.vel/2;
+                if (d < 0.002) {
+                    vec3 avg_vel = (particle.vel*particle.mass + other_particle.vel*other_particle.mass)/(particle.mass+other_particle.mass);
                     particle.vel = avg_vel;
                 }
                 

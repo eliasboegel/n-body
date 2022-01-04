@@ -12,13 +12,13 @@ class ComputeParticleBase(mglw.WindowConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.n_bodies = 2048
-        m = 0.00000001
+        self.n_bodies = 4096
+        m = 0.0001
         m_sun = np.power(10,7)  # Mass of sun, roughly 10^6 times bigger than earth
         # Create the two buffers the compute shader will write and read from
         #array = np.genfromtxt("init.csv", skip_header=1, delimiter=",")[:,1:].astype("f4")
         #initial_state = initial_state[:, [2,3,4,1,5,6,7,0,8,9,10,11]] # Re-order columns to match layout in shader
-        initial_state = np.random.uniform(-0.95, 0.95, (self.n_bodies,12)).astype("f4")
+        initial_state = np.random.uniform(-0.45, 0.45, (self.n_bodies,12)).astype("f4")
         # initial_state = np.ones((self.n_bodies, 12)).astype("f4")
         initial_state[:,2] = 0
         initial_state[:,3] = 0.005 # Radius
@@ -26,24 +26,23 @@ class ComputeParticleBase(mglw.WindowConfig):
         initial_state[:,8:11] = np.random.uniform(0.5, 1.0, (self.n_bodies,3)).astype("f4") # Color
         initial_state[:,11] = 1 # Alpha
 
-        ## Primitively generating Mars and Earth
-        initial_state[1:3, 1] = 0   # Setting y coord of both mars n earth to be 0
-        initial_state[1, 0] = 0.5   # x coord of earth, 0.5 in game distance equals 1 AU
-        initial_state[2, 0] = 0.75  # x coord of mars, 1.5 AU
-        initial_state[1, 7] = 10    # Mass of earth
-        initial_state[2, 7] = 1     # Mass of mars, is roughly 10 times smaller than earth
-        initial_state[1:3, 3] = 0.02# Making radius of earth and mars bigger so its more visible
+        ## Primitively generating 'Mars' and 'Earth'
+        initial_state[1:3, 1] = 0       # Setting y coord of both mars n earth to be 0
+        initial_state[1, 0] = 0.5       # x coord of earth, 0.5 in game distance equals 1 AU
+        initial_state[2, 0] = 0.75      # x coord of mars, 1.5 AU
+        initial_state[1, 7] = 10        # Mass of earth
+        initial_state[2, 7] = 1         # Mass of mars, is roughly 10 times smaller than earth
+        initial_state[1:3, 3] = 0.02    # Making radius of earth and mars bigger so its more visible
         initial_state[1:3, 8:11] = np.array([1,1,1])
 
         ## Generating circular orbits for all the bodies
         pos = initial_state[:,0:3]
         r = np.sqrt(np.sum(pos**2,axis=1))
-        v = np.sqrt((m_sun) / r)
+        v = np.sqrt((m_sun) / r)*np.random.uniform(0.9, 1.1, (self.n_bodies)).astype("f4") # velocity with small randomness
         vx = -v*pos[:,1]/r
         vy = v*pos[:,0]/r
         vz = v*pos[:,2]/r
         initial_state[:,4:7] = np.array([vx, vy, vz]).transpose()/1
-
 
         ## Creating the Sun
         initial_state[0, :3] = 0  # Pos
@@ -76,13 +75,16 @@ class ComputeParticleBase(mglw.WindowConfig):
         ## Frame time stuff
         self.frame_times = [0,0]
 
+        ## Keyboard stuff
+        self.paused = False
+
 
     def render(self, time, frame_time):
         # if frame_time > 0.0001: print(f"Frame time: {frame_time * 1000} ms")
         self.frame_times[0] += frame_time
         self.frame_times[1] += 1
 
-        if self.frame_times[1] >= 50:
+        if self.frame_times[1] >= 200:
             print(f'Frame time = {round(self.frame_times[0] / self.frame_times[1] * 1000, 2)}ms')
             self.frame_times[0], self.frame_times[1] = 0, 0
 
@@ -92,11 +94,39 @@ class ComputeParticleBase(mglw.WindowConfig):
 
         # Calculate the next position of the particles with compute shader
         n_workgroups_update = np.ceil(self.n_bodies / 1024).astype(int)
-        self.particle_update_compute['dt'] = frame_time * dt
+        self.particle_update_compute['dt'] = frame_time * dt * self.paused
         self.particle_update_compute.run(group_x=n_workgroups_update)
 
         # Batch draw the particles
         self.vao_particles.render(mode=self.ctx.POINTS)
+
+    def key_event(self, key, action, modifiers):
+        # Key presses
+        if action == self.wnd.keys.ACTION_PRESS:
+            if key == self.wnd.keys.SPACE:
+                ## Pausing
+                if self.paused == False:
+                    self.paused = True
+                else:
+                    self.paused = False
+                print("SPACE key was pressed")
+
+            # Using modifiers (shift and ctrl)
+
+            if key == self.wnd.keys.ENTER:
+                ## Retrieving data from buffers into a numpy array
+                print("Enter was pressed")
+                raw = self.buf_particles.read(size=-1)
+                arr = np.frombuffer(raw, dtype="f4")
+                print((arr))
+
+            if key == self.wnd.keys.Z and modifiers.ctrl:
+                print("ctrl + Z was pressed")
+
+        # Key releases
+        elif action == self.wnd.keys.ACTION_RELEASE:
+            if key == self.wnd.keys.SPACE:
+                print("SPACE key was released")
 
 if __name__ == "__main__":
     ComputeParticleBase.run()

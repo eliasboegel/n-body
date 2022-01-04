@@ -49,7 +49,7 @@ class ComputeParticleBase(mglw.WindowConfig):
         initial_state[0, 3] = 0.045  # Radius
         initial_state[0,4:7] = 0 # Velocity
         initial_state[0, 7] = m_sun  # Mass
-        initial_state[0, 8:11] = np.array([1,0,0])  # Color
+        initial_state[0, 8:11] = np.array([1,0.2,0])  # Color
 
         self.buf_particles = self.ctx.buffer(initial_state.flatten())
         self.buf_acc = self.ctx.buffer(reserve=self.n_bodies*self.n_bodies*4*4) # Reserve 3 4-byte floats for each combination of n_bodies
@@ -76,7 +76,7 @@ class ComputeParticleBase(mglw.WindowConfig):
         self.frame_times = [0,0]
 
         ## Keyboard stuff
-        self.paused = False
+        self.paused = True
 
 
     def render(self, time, frame_time):

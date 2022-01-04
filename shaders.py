@@ -19,12 +19,16 @@ items_fragment_shader_code = """
 
 items_vertex_shader_code = """
     #version 430
-    in vec4 in_vert;
+    in vec4 in_vert_curr;
+    in vec4 in_vert_prev;
+    in float in_interp;
     in vec4 in_col;
     out vec4 v_color;
     void main()
     {
-        gl_Position = in_vert; // x, y, 0, radius
+        vec4 vel_fd = in_vert_prev - in_vert_curr;
+        gl_Position = in_vert_curr + vel_fd * in_interp;
+        
         v_color = in_col;
     }
 """
